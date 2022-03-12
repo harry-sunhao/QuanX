@@ -22,7 +22,6 @@ hostname = scibug.com
 */
 
 
-***************************
 let obj = JSON.parse($response.body);
 
 obj.membership = {
