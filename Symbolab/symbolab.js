@@ -25,7 +25,6 @@ hostname = scibug.com
 let obj = JSON.parse($response.body);
 
 obj.membership = {
-  "isCurrentlyInFreeTrial" : false,
     "valid":true,
     "hasUserConsumedAppleFreeTrial":false,
     "newlyAssociated":false
