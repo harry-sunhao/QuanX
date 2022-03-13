@@ -14,5 +14,5 @@ Quantumult X:
 hostname = res.vesal.site
 */
 var body = $response.body
-    .replace(/\"is_charge\":\"yes\"/, "\"is_charge\":\"no\"");
+    .replace(/\"is_charge\" : \"yes\"/, "\"is_charge\" : \"no\"");
 $done({ body });
