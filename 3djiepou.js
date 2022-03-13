@@ -13,6 +13,5 @@ Quantumult X:
 [mitm]
 hostname = res.vesal.site
 */
-var body = $response.body
-    .replace(/yes/, "no");
+var body = $response.body.replace(/yes/, "no");
 $done({ body });
