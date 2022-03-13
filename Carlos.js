@@ -1,3 +1,3 @@
 var body = $response.body
-    .replace(/\"premiumExpires\":1/, "\"premiumExpires\":0");
+    .replace(/\"isBuy\":false/, "\"isBuy\":true");
 $done({ body });
