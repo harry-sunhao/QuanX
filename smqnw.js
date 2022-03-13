@@ -12,7 +12,7 @@
 Quantumult X:
 
 [rewrite_local]
-^https:\/\/(api|api-cs)\.intsig\.net\/purchase\/cs\/query_property\?$ url script-response-body https://raw.githubusercontent.com/harry-sunhao/QuanX/main/smqnw.js
+^https:\/\/(api|api-cs)\.intsig\.net\/purchase\/cs\/query_property\? url script-response-body https://raw.githubusercontent.com/harry-sunhao/QuanX/main/smqnw.js
 
 [mitm]
 hostname = ap*.intsig.net
