@@ -15,5 +15,5 @@ hostname = res.vesal.site
 */
 let obj = JSON.parse($response.body);
 
-obj= {"code":"1","msg":{"time":1742495767,"shiyong":"60000","power":"100","share":100,"je":100,"ds":"100.00"}}
+obj= {"code":"1","msg":{"time":1742495767,"power":"100","share":100,"je":100,"ds":"100.00"}}
 $done({body: JSON.stringify(obj)});
