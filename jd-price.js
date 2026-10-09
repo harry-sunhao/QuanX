@@ -1,6 +1,15 @@
 /*
 # 京东比价 + 规格折算单价（元/ml、元/g 等）
 # 基于慢慢买比价脚本修改
+
+[rewrite_local]
+^https?:\/\/in\.m\.jd\.com\/product\/graphext\/\d+\.html url script-response-body https://raw.githubusercontent.com/wf021325/qx/master/js/jd_price.js
+^https?:\/\/apapia-sqk-weblogic\.manmanbuy\.com\/baoliao\/center\/menu$ url script-request-body https://raw.githubusercontent.com/wf021325/qx/master/js/jd_price.js
+
+# ^https?:\/\/in\.m\.jd\.com\/product\/graphext\/\d+\.html url script-response-body http://192.168.2.170:8080/jd_price.js
+# ^https?:\/\/apapia-sqk-weblogic\.manmanbuy\.com\/baoliao\/center\/menu$ url script-request-body http://192.168.2.170:8080/jd_price.js
+[mitm]
+hostname = in.m.jd.com, apapia-sqk-weblogic.manmanbuy.com
 */
 const $ = new Env("京东比价");
 
