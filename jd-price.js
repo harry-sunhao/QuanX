@@ -27,9 +27,9 @@
 # ...
 
 [rewrite_local]
-^https?:\/\/in\.m\.jd\.com\/product\/graphext\/\d+\.html url script-response-body https://raw.githubusercontent.com/harry-sunhao/QuanX/refs/heads/main/jd-price.js?v=2026100901
+^https?:\/\/in\.m\.jd\.com\/product\/graphext\/\d+\.html url script-response-body https://raw.githubusercontent.com/harry-sunhao/QuanX/refs/heads/main/jd-price.js?v=2026101002
 
-^https?:\/\/apapia-sqk-weblogic\.manmanbuy\.com\/baoliao\/center\/menu$ url script-request-body https://raw.githubusercontent.com/harry-sunhao/QuanX/refs/heads/main/jd-price.js?v=2026100901
+^https?:\/\/apapia-sqk-weblogic\.manmanbuy\.com\/baoliao\/center\/menu$ url script-request-body https://raw.githubusercontent.com/harry-sunhao/QuanX/refs/heads/main/jd-price.js?v=2026101002
 
 
 # ^https?:\/\/in\.m\.jd\.com\/product\/graphext\/\d+\.html url script-response-body http://192.168.2.170:8080/jd_price.js
@@ -84,6 +84,7 @@ if (url.includes(path1)) {
 
 async function main() {
     intCryptoJS();
+    $.log("🎉 [京东比价] 当前运行版本: v2026101002 (含智能折合单价)");
 
     const match = url.match(/product\/graphext\/(\d+)\.html/);
     if (!match) throw new Error("京东URL匹配失败");
