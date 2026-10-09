@@ -6,7 +6,15 @@
 [mitm]
 hostname = in.m.jd.com, apapia-sqk-weblogic.manmanbuy.com
 */
-const $ = new Env("京东比价");
+
+const SCRIPT_VERSION = "v2026.10.09.01";
+const $ = new Env(`京东比价[${SCRIPT_VERSION}]`);
+
+function logWithTime(msg) {
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+    $.log(`[${timeStr}] ${msg}`);
+}
 
 if ($.isNode()) {
     global.$request = {
@@ -31,21 +39,26 @@ $.version = $.getdata('mmb_v') || 'V1'
 if (url.includes(path2)) {
     const reqbody = $request.body
     $.setdata(reqbody, manmanbuy_key);
+    logWithTime("捕获到慢慢买凭证: " + reqbody.substring(0, 30) + "...");
     $.msg($.name, '获取ck成功🎉', reqbody);
 }
 
 if (url.includes(path1)) {
+    logWithTime(`开始拦截京东商详: ${url}`);
     const responseBody = $response?.body;
     main()
-        .then(res => $done(res || { body: responseBody }))
+        .then(res => {
+            logWithTime("执行成功完成");
+            $done(res || { body: responseBody });
+        })
         .catch(err => {
-                const html = `<div style= "max-width: 90%;margin: 20px auto;padding: 16px;background: #ffffff;color: #d32f2f;border: 2px solid #f44336;border-radius: 12px;font-size: 16px;text-align:left;box-shadow: 0 2px 6px rgba(0,0,0,0.06);"><strong>${err.message}</strong></div>`;
-                $.msg('京东比价出现错误', '👉点击此处打开慢慢买检查👈', err.message, {url: `manmanbuy://?type=func&value=MainUtils.openWin(%7Bname%3A'TrendDetailScene',navi%3Anavigation%2CpageParam%3A%7BsearchKey%3A'${$.manmanbuy_url}'%2CsceneFrom%3A'mmbwx'%7D%7D)`})
-                $done({
-                    body: responseBody.replace("<body>", `<body>${html}`)
-                });
-            }
-        )
+            logWithTime(`🚨 发生错误: ${err.message}`);
+            const html = `<div style="max-width: 90%;margin: 20px auto;padding: 16px;background: #ffffff;color: #d32f2f;border: 2px solid #f44336;border-radius: 12px;font-size: 16px;text-align:left;box-shadow: 0 2px 6px rgba(0,0,0,0.06);"><strong>[${SCRIPT_VERSION}] ${err.message}</strong></div>`;
+            $.msg('京东比价出现错误', '👉点击此处打开慢慢买检查👈', err.message, {url: `manmanbuy://?type=func&value=MainUtils.openWin(%7Bname%3A'TrendDetailScene',navi%3Anavigation%2CpageParam%3A%7BsearchKey%3A'${$.manmanbuy_url}'%2CsceneFrom%3A'mmbwx'%7D%7D)`})
+            $done({
+                body: responseBody.replace("<body>", `<body>${html}`)
+            });
+        });
 }
 
 async function main() {
@@ -62,26 +75,47 @@ async function main() {
     let link = JD_Url, stteId;
 
     if (version === "V2") {
+        logWithTime("正在请求 stteId [V2]...");
         const parse = checkRes(await get_stteId(JD_Url), '获取stteId [V2]');
         link = parse?.result?.link;
         stteId = parse?.result?.stteId;
     }
+
+    logWithTime("正在请求 basic spbh...");
     const basic = checkRes(await get_spbh(link, stteId, version), '获取 spbh [V1/V2]');
-    const jiagequshi = checkRes(await get_jiagequshi(basic?.result?.url, basic?.result?.spbh), '获取价格趋势')
-    const trend = checkRes(await get_priceRemark(jiagequshi?.result?.trend), '价格备注')
+    
+    logWithTime("正在请求价格趋势 jiagequshi...");
+    const jiagequshi = checkRes(await get_jiagequshi(basic?.result?.url, basic?.result?.spbh), '获取价格趋势');
+    
+    logWithTime("正在请求价格备注 trend...");
+    const trend = checkRes(await get_priceRemark(jiagequshi?.result?.trend), '价格备注');
+
     const ListPriceDetail = trend?.remark?.ListPriceDetail;
     const exclude = new Set(['当前到手价', '历史最低价', '618价格', '双11价格', '30天最低价', '60天最低价', '180天最低价']);
     const list = ListPriceDetail.filter(i => exclude.has(i.Name));
-    
-    // 100% 保持原版 Price_HTML 调用
+
+    // 生成原版 HTML
     let html = Price_HTML(list);
 
-    // 在生成的 HTML 字符串最后做无损安全插入
+    // 计算折合单价（安全兼容 Number / String 类型，且带毫秒计时日志）
     try {
+        const tStart = Date.now();
         const cur = list.find(i => i.Name === '当前到手价');
-        const price = cur ? parseFloat(cur.Price.replace(/[^0-9.]/g, '')) : 0;
-        const textSource = JSON.stringify(basic) + JSON.stringify(jiagequshi) + responseBody;
-        
+        let price = 0;
+        if (cur && cur.Price !== undefined && cur.Price !== null) {
+            price = parseFloat(String(cur.Price).replace(/[^0-9.]/g, '')) || 0;
+        }
+
+        // 获取检索文本源
+        const textSource = [
+            basic?.result?.title,
+            basic?.result?.mc,
+            jiagequshi?.result?.title,
+            jiagequshi?.result?.mc,
+            trend?.remark?.title,
+            responseBody
+        ].filter(Boolean).join(' ');
+
         let m = textSource.match(/(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克|抽|包|卷|罐|瓶)\s*[*×xX]\s*(\d+)/i);
         let amount = 0, unit = '';
         if (m) {
@@ -94,10 +128,13 @@ async function main() {
                 unit = s[2].toLowerCase();
             }
         }
+
         if (unit === 'l' || unit === '升') { amount *= 1000; unit = 'ml'; }
         if (unit === 'kg' || unit === '千克') { amount *= 1000; unit = 'g'; }
         if (unit === '毫升') unit = 'ml';
         if (unit === '克') unit = 'g';
+
+        logWithTime(`单价解析耗时 ${Date.now() - tStart}ms，价格: ¥${price}，总量: ${amount}${unit}`);
 
         if (price > 0 && amount > 0) {
             let uPrice = price / amount;
@@ -105,26 +142,25 @@ async function main() {
             let insertRow = `<tr style="background:#fff0f0;color:#e61a23;"><td>折合单价</td><td>共 ${amount}${unit}</td><td colspan="2" style="font-size:14px;color:#e61a23;">¥${showP}</td></tr>`;
             html = html.replace('<tbody>', '<tbody>' + insertRow);
         }
-    } catch(e) {}
+    } catch (e) {
+        logWithTime(`单价折算非阻塞异常: ${e.message}`);
+    }
 
     const body = responseBody.replace("<body>", `<body>${html}`);
     return {body};
 }
 
-// 返回结果检查函数
 function checkRes(res, desc = '') {
     if (res.ok !== 1) {
-        $.log('慢慢买提示您：' + $.toStr(res));
+        logWithTime(`慢慢买接口错误 [${desc}]: ${$.toStr(res)}`);
         throw new Error(`慢慢买提示您：${res.msg || `${desc}失败`}`);
     }
     return res;
 }
 
-// 比价html
 function Price_HTML(priceList) {
     const rows = priceList.map(item => {
         let {Name: name, Date: date, Price: price = '', Difference: diff = ''} = item;
-        console.log(name,price,date,diff)
         if (name === '当前到手价') {
             date = $.time('yyyy-MM-dd');
             diff = '仅供参考';
@@ -136,10 +172,9 @@ function Price_HTML(priceList) {
         else if (diff.startsWith('↓')) diffClass = 'down';
         return `<tr><td>${name}</td><td>${date}</td><td>${price}</td><td class="price-diff ${diffClass}">${diff}</td></tr>`;
     }).join('');
-    return `<div class="price-container"><table class="price-table"><thead><tr><th>类型</th><th>日期</th><th>价格</th><th>差价</th></tr></thead><tbody>${rows}</tbody></table></div><style>body,table{font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;}.price-container{max-width:800px;margin:10px auto;padding:10px;font-size:13px;font-weight:bold;background:#FFF9F9;color:#333;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);}.price-table{width:100%;border-collapse:separate;border-spacing:0;border-radius:8px;overflow:hidden;}.price-table th{background:#e61a23;color:#fff;padding:12px;text-align:left;font-weight:bold;}.price-table td{padding:12px;border-bottom:1px solid#EEE;font-weight:bold;}.price-diff.up{color:#C91623;font-weight:bold;}.price-diff.down{color:#00aa00;font-weight:bold;}</style>`;
+    return `<div class="price-container"><div style="text-align:right;font-size:10px;color:#bbb;padding-bottom:4px;">版本: ${SCRIPT_VERSION}</div><table class="price-table"><thead><tr><th>类型</th><th>日期</th><th>价格</th><th>差价</th></tr></thead><tbody>${rows}</tbody></table></div><style>body,table{font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;}.price-container{max-width:800px;margin:10px auto;padding:10px;font-size:13px;font-weight:bold;background:#FFF9F9;color:#333;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);}.price-table{width:100%;border-collapse:separate;border-spacing:0;border-radius:8px;overflow:hidden;}.price-table th{background:#e61a23;color:#fff;padding:12px;text-align:left;font-weight:bold;}.price-table td{padding:12px;border-bottom:1px solid#EEE;font-weight:bold;}.price-diff.up{color:#C91623;font-weight:bold;}.price-diff.down{color:#00aa00;font-weight:bold;}</style>`;
 }
 
-// 提交请求
 async function mmbRequest(Params, url) {
     if (!$.manmanbuy) {
         $.manmanbuy = getck();
@@ -168,7 +203,6 @@ async function mmbRequest(Params, url) {
     return await httpRequest(opt);
 }
 
-// 根据【明文】商品链接，获取 stteId
 async function get_stteId(searchKey) {
     const url = 'https://apapia-common.manmanbuy.com/SiteCommand/parse';
     const payload = {
@@ -253,7 +287,7 @@ async function httpRequest(options) {
             new Promise((_, reject) => setTimeout(() => reject(`⛔️ 请求超时: ${options['url']}`), _timeout)),
             new Promise((resolve, reject) => {
                 $[_method.toLowerCase()](options, (error, response, data) => {
-                    error && $.log($.toStr(error));
+                    error && logWithTime(`请求失败: ${$.toStr(error)}`);
                     if (_respType !== 'all') {
                         resolve($.toObj(response?.[_respType], response?.[_respType]));
                     } else {
