@@ -16,31 +16,44 @@ function decodeTimestamp(noteId) {
   return new Date(parseInt(hex, 16) * 1000);
 }
 
-function formatPrefix(d) {
+// 格式化准确时间后缀：当年显示 04.12 15:30，跨年显示 2024.04.12 15:30
+function formatSuffix(d) {
   const pad = (n) => String(n).padStart(2, '0');
-  if (d.getFullYear() === thisYear) {
-    return `(${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}) `;
+  const y = d.getFullYear();
+  const m = pad(d.getMonth() + 1);
+  const date = pad(d.getDate());
+  const h = pad(d.getHours());
+  const min = pad(d.getMinutes());
+
+  if (y === thisYear) {
+    return ` · ${m}.${date} ${h}:${min}`;
   }
-  return `(${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}) `;
+  return ` · ${y}.${m}.${date} ${h}:${min}`;
 }
 
-function hasPrefix(str) {
-  return /^\(\d{2}-\d{2} \d{2}:\d{2}\) /.test(str) || /^\(\d{4}-\d{2}-\d{2}\) /.test(str);
+// 防重复追加检测
+function hasSuffix(str) {
+  return /[\s·|]\d{2,4}\.\d{2}\.\d{2}(?:\s+\d{2}:\d{2})?$/.test(str) ||
+         /[\s·|]\d{2}\.\d{2}\s+\d{2}:\d{2}$/.test(str);
 }
 
 function processItem(item) {
-  if (item?.model_type !== 'note') return;
-  if (!item?.id || !/^[a-f0-9]{24}$/i.test(item.id)) return;
+  const target = item?.note_card || item;
+  const id = item?.id || target?.id;
+  if (!id || !/^[a-f0-9]{24}$/i.test(id)) return;
 
   try {
-    const d = decodeTimestamp(item.id);
+    const d = decodeTimestamp(id);
     if (isNaN(d.getTime())) return;
 
-    const prefix = formatPrefix(d);
+    const suffix = formatSuffix(d);
 
     for (const field of ['display_title', 'title', 'name']) {
-      if (item[field] && !hasPrefix(item[field])) {
-        item[field] = prefix + item[field];
+      if (target[field] && !hasSuffix(target[field])) {
+        target[field] = target[field] + suffix;
+      }
+      if (item[field] && !hasSuffix(item[field])) {
+        item[field] = item[field] + suffix;
       }
     }
   } catch {
