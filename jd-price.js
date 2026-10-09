@@ -1,16 +1,12 @@
 /*
-# 京东比价 + 规格折算单价（元/ml、元/g 等）
-# 基于慢慢买比价脚本修改
-
 [rewrite_local]
-^https?:\/\/in\.m\.jd\.com\/product\/graphext\/\d+\.html url script-response-body https://raw.githubusercontent.com/wf021325/qx/master/js/jd_price.js
-^https?:\/\/apapia-sqk-weblogic\.manmanbuy\.com\/baoliao\/center\/menu$ url script-request-body https://raw.githubusercontent.com/wf021325/qx/master/js/jd_price.js
+^https?:\/\/in\.m\.jd\.com\/product\/graphext\/\d+\.html url script-response-body https://raw.githubusercontent.com/harry-sunhao/QuanX/refs/heads/main/jd-price.js
+^https?:\/\/apapia-sqk-weblogic\.manmanbuy\.com\/baoliao\/center\/menu$ url script-request-body https://raw.githubusercontent.com/harry-sunhao/QuanX/refs/heads/main/jd-price.js
 
-# ^https?:\/\/in\.m\.jd\.com\/product\/graphext\/\d+\.html url script-response-body http://192.168.2.170:8080/jd_price.js
-# ^https?:\/\/apapia-sqk-weblogic\.manmanbuy\.com\/baoliao\/center\/menu$ url script-request-body http://192.168.2.170:8080/jd_price.js
 [mitm]
 hostname = in.m.jd.com, apapia-sqk-weblogic.manmanbuy.com
 */
+
 const $ = new Env("京东比价");
 
 if ($.isNode()) {
@@ -27,14 +23,14 @@ if ($.isNode()) {
 }
 
 const path1 = '/product/graphext/';
-const path2 = '/baoliao/center/menu'
+const path2 = '/baoliao/center/menu';
 const manmanbuy_key = 'manmanbuy_val';
 const url = $request.url;
 
-$.version = $.getdata('mmb_v') || 'V1'
+$.version = $.getdata('mmb_v') || 'V1';
 
 if (url.includes(path2)) {
-    const reqbody = $request.body
+    const reqbody = $request.body;
     $.setdata(reqbody, manmanbuy_key);
     $.msg($.name, '获取ck成功🎉', reqbody);
 }
@@ -44,22 +40,22 @@ if (url.includes(path1)) {
     main()
         .then(res => $done(res || { body: responseBody }))
         .catch(err => {
-                const html = `<div style= "max-width: 90%;margin: 20px auto;padding: 16px;background: #ffffff;color: #d32f2f;border: 2px solid #f44336;border-radius: 12px;font-size: 16px;text-align:left;box-shadow: 0 2px 6px rgba(0,0,0,0.06);"><strong>${err.message}</strong></div>`;
-                $.msg('京东比价出现错误', '👉点击此处打开慢慢买检查👈', err.message, {url: `manmanbuy://?type=func&value=MainUtils.openWin(%7Bname%3A'TrendDetailScene',navi%3Anavigation%2CpageParam%3A%7BsearchKey%3A'${$.manmanbuy_url}'%2CsceneFrom%3A'mmbwx'%7D%7D)`})
-                $done({
-                    body: responseBody.replace("<body>", `<body>${html}`)
-                });
-            }
-        )
+            const html = `<div style="max-width: 90%;margin: 20px auto;padding: 16px;background: #ffffff;color: #d32f2f;border: 2px solid #f44336;border-radius: 12px;font-size: 16px;text-align:left;box-shadow: 0 2px 6px rgba(0,0,0,0.06);"><strong>${err.message}</strong></div>`;
+            $done({
+                body: responseBody.replace("<body>", `<body>${html}`)
+            });
+        });
 }
 
+// 主流程
 async function main() {
     intCryptoJS();
 
     const match = url.match(/product\/graphext\/(\d+)\.html/);
     if (!match) throw new Error("京东URL匹配失败");
+    const skuId = match[1];
 
-    const JD_Url = `https://item.jd.com/${match[1]}.html`;
+    const JD_Url = `https://item.jd.com/${skuId}.html`;
     $.manmanbuy_url = encodeURIComponent(JD_Url);
     const responseBody = $response?.body || "";
 
@@ -78,71 +74,82 @@ async function main() {
     const exclude = new Set(['当前到手价', '历史最低价', '618价格', '双11价格', '30天最低价', '60天最低价', '180天最低价']);
     const list = ListPriceDetail.filter(i => exclude.has(i.Name));
 
-    // ======== 核心改动：计算折合单价 ========
-    // 1. 获取当前价格
+    // ======== 获取当前价格与标题并计算单价 ========
     let currentPrice = null;
     const curObj = list.find(i => i.Name === '当前到手价');
     if (curObj && curObj.Price) {
         currentPrice = parseFloat(curObj.Price.toString().replace(/[^0-9.]/g, ''));
     }
 
-    // 2. 尝试从慢慢买返回的标题或原始页面 body 中解析规格（如 500ml, 1.5L, 500g, 40包 等）
-    const searchTargetText = (trend?.remark?.title || basic?.result?.title || responseBody);
-    const unitPriceInfo = calcUnitPrice(searchTargetText, currentPrice);
+    // 主动获取京东商品标题（精准匹配规格）
+    let skuTitle = await getJdTitle(skuId);
 
-    // 3. 生成表格 HTML 并注入
+    // 计算单价
+    const unitPriceInfo = calcUnitPrice(skuTitle, currentPrice);
+
     const html = Price_HTML(list, unitPriceInfo);
     const body = responseBody.replace("<body>", `<body>${html}`);
     return { body };
 }
 
-// 规格与单价解析计算核心方法
+// 获取京东商品标题
+async function getJdTitle(skuId) {
+    try {
+        const opt = {
+            url: `https://item.m.jd.com/ware/view.action?wareId=${skuId}`,
+            headers: {
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15"
+            }
+        };
+        const html = await httpRequest(opt);
+        if (typeof html === 'string') {
+            const m = html.match(/<title>([^<]+)<\/title>/i);
+            if (m && m[1]) return m[1];
+        }
+    } catch (e) {
+        $.log('获取商品标题异常: ' + e);
+    }
+    return '';
+}
+
+// 核心换算逻辑
 function calcUnitPrice(rawText, price) {
     if (!rawText || !price || isNaN(price) || price <= 0) return null;
 
-    // 常见连乘规格（如 500ml*24、500ml*24瓶、24*500ml）或单规格（如 500ml、1.5L、2.5kg、200抽、40包）
-    // 1. 匹配类似 "500ml*24" 或 "500ml x 24"
-    let multiMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克|抽|片|包|袋|罐|瓶)\s*[*×xX]\s*(\d+)/i);
     let amount = 0;
     let unit = '';
 
+    // 格式1: 330ml*24 或 330ml*24罐 / 330ml x 24
+    let multiMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克|抽|片|包|袋|罐|瓶)\s*[*×xX]\s*(\d+)/i);
+    // 格式2: 24罐*330ml 或 24*330ml
+    let reverseMultiMatch = rawText.match(/(\d+)\s*(?:瓶|罐|包|袋|盒|支)?[*×xX]\s*(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克)/i);
+    // 格式3: 单品 500ml / 1.5L
+    let singleMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克|抽|包|卷)/i);
+
     if (multiMatch) {
-        let singleAmount = parseFloat(multiMatch[1]);
+        amount = parseFloat(multiMatch[1]) * parseInt(multiMatch[3], 10);
         unit = multiMatch[2].toLowerCase();
-        let count = parseInt(multiMatch[3], 10);
-        amount = singleAmount * count;
-    } else {
-        // 2. 匹配类似 "24瓶*500ml"
-        let reverseMultiMatch = rawText.match(/(\d+)\s*(?:瓶|罐|包|袋|盒|支)[*×xX]\s*(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克)/i);
-        if (reverseMultiMatch) {
-            let count = parseInt(reverseMultiMatch[1], 10);
-            let singleAmount = parseFloat(reverseMultiMatch[2]);
-            unit = reverseMultiMatch[3].toLowerCase();
-            amount = singleAmount * count;
-        } else {
-            // 3. 匹配常规单件规格 "500ml", "1.5L"
-            let singleMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克|抽|包|卷)/i);
-            if (singleMatch) {
-                amount = parseFloat(singleMatch[1]);
-                unit = singleMatch[2].toLowerCase();
-            }
-        }
+    } else if (reverseMultiMatch) {
+        amount = parseFloat(reverseMultiMatch[2]) * parseInt(reverseMultiMatch[1], 10);
+        unit = reverseMultiMatch[3].toLowerCase();
+    } else if (singleMatch) {
+        amount = parseFloat(singleMatch[1]);
+        unit = singleMatch[2].toLowerCase();
     }
 
     if (!amount || amount <= 0 || !unit) return null;
 
-    // 统一转换为标准计量单位
+    // 统一单位
     if (unit === 'l' || unit === '升') { amount *= 1000; unit = 'ml'; }
     if (unit === 'kg' || unit === '千克') { amount *= 1000; unit = 'g'; }
     if (unit === '毫升') unit = 'ml';
     if (unit === '克') unit = 'g';
 
-    // 计算单位单价
     let unitPrice = price / amount;
     let formattedPrice = '';
     let displayUnit = unit;
 
-    // 如果单价太小（比如每 ml 只有 0.003 元），自动展示为 “每 100ml / 100g”
+    // 针对液体/重量，如果单价极小则折算成每 100ml / 100g 显示
     if (unitPrice < 0.05 && (unit === 'ml' || unit === 'g')) {
         formattedPrice = (unitPrice * 100).toFixed(2);
         displayUnit = `100${unit}`;
@@ -153,14 +160,11 @@ function calcUnitPrice(rawText, price) {
     }
 
     return {
-        totalAmount: amount,
-        unit: unit,
         displayStr: `¥${formattedPrice} / ${displayUnit}`,
-        detailDesc: `共计 ${amount}${unit}`
+        detailDesc: `共 ${amount}${unit}`
     };
 }
 
-// 返回结果检查函数
 function checkRes(res, desc = '') {
     if (res.ok !== 1) {
         $.log('慢慢买提示您：' + $.toStr(res));
@@ -169,7 +173,6 @@ function checkRes(res, desc = '') {
     return res;
 }
 
-// 比价html（增加了单价展示行）
 function Price_HTML(priceList, unitPriceInfo) {
     let rows = priceList.map(item => {
         let {Name: name, Date: date, Price: price = '', Difference: diff = ''} = item;
@@ -185,13 +188,12 @@ function Price_HTML(priceList, unitPriceInfo) {
         return `<tr><td>${name}</td><td>${date}</td><td>${price}</td><td class="price-diff ${diffClass}">${diff}</td></tr>`;
     }).join('');
 
-    // 如果成功提取到了单价，作为第一行高亮展示
     let unitPriceRow = '';
     if (unitPriceInfo) {
-        unitPriceRow = `<tr style="background:#FFF0F0;color:#E61A23;">
+        unitPriceRow = `<tr style="background:#FFF0F0;color:#e61a23;">
             <td><strong>折合单价</strong></td>
             <td>${unitPriceInfo.detailDesc}</td>
-            <td colspan="2" style="font-size:14px;color:#E61A23;"><strong>${unitPriceInfo.displayStr}</strong></td>
+            <td colspan="2" style="font-size:15px;color:#e61a23;"><strong>${unitPriceInfo.displayStr}</strong></td>
         </tr>`;
     }
 
@@ -217,7 +219,6 @@ function Price_HTML(priceList, unitPriceInfo) {
     </style>`;
 }
 
-// 提交请求
 async function mmbRequest(Params, url) {
     if (!$.manmanbuy) {
         $.manmanbuy = getck();
@@ -239,7 +240,7 @@ async function mmbRequest(Params, url) {
         url,
         headers: {
             "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 - mmbWebBrowse - ios"
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_6_1 like Mac OS X) AppleWebKit/605.1.15"
         },
         body: payloadStr
     };
