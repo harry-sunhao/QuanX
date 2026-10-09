@@ -137,6 +137,15 @@ async function main() {
     return { body };
 }
 
+// 返回结果检查函数
+function checkRes(res, desc = '') {
+    if (!res || res.ok !== 1) {
+        $.log('慢慢买提示您：' + $.toStr(res));
+        throw new Error(`慢慢买提示您：${res?.msg || `${desc}失败`}`);
+    }
+    return res;
+}
+
 // 比价html
 function Price_HTML(priceList, unitInfo) {
     let unitRows = '';
