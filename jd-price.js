@@ -22,14 +22,14 @@ if ($.isNode()) {
 }
 
 const path1 = '/product/graphext/';
-const path2 = '/baoliao/center/menu';
+const path2 = '/baoliao/center/menu'
 const manmanbuy_key = 'manmanbuy_val';
 const url = $request.url;
 
-$.version = $.getdata('mmb_v') || 'V1';
+$.version = $.getdata('mmb_v') || 'V1'
 
 if (url.includes(path2)) {
-    const reqbody = $request.body;
+    const reqbody = $request.body
     $.setdata(reqbody, manmanbuy_key);
     $.msg($.name, '获取ck成功🎉', reqbody);
 }
@@ -40,12 +40,12 @@ if (url.includes(path1)) {
         .then(res => $done(res || { body: responseBody }))
         .catch(err => {
                 const html = `<div style= "max-width: 90%;margin: 20px auto;padding: 16px;background: #ffffff;color: #d32f2f;border: 2px solid #f44336;border-radius: 12px;font-size: 16px;text-align:left;box-shadow: 0 2px 6px rgba(0,0,0,0.06);"><strong>${err.message}</strong></div>`;
-                $.msg('京东比价出现错误', '👉点击此处打开慢慢买检查👈', err.message, {url: `manmanbuy://?type=func&value=MainUtils.openWin(%7Bname%3A'TrendDetailScene',navi%3Anavigation%2CpageParam%3A%7BsearchKey%3A'${$.manmanbuy_url}'%2CsceneFrom%3A'mmbwx'%7D%7D)`});
+                $.msg('京东比价出现错误', '👉点击此处打开慢慢买检查👈', err.message, {url: `manmanbuy://?type=func&value=MainUtils.openWin(%7Bname%3A'TrendDetailScene',navi%3Anavigation%2CpageParam%3A%7BsearchKey%3A'${$.manmanbuy_url}'%2CsceneFrom%3A'mmbwx'%7D%7D)`})
                 $done({
                     body: responseBody.replace("<body>", `<body>${html}`)
                 });
             }
-        );
+        )
 }
 
 async function main() {
@@ -67,49 +67,34 @@ async function main() {
         stteId = parse?.result?.stteId;
     }
     const basic = checkRes(await get_spbh(link, stteId, version), '获取 spbh [V1/V2]');
-    const jiagequshi = checkRes(await get_jiagequshi(basic?.result?.url, basic?.result?.spbh), '获取价格趋势');
-    const trend = checkRes(await get_priceRemark(jiagequshi?.result?.trend), '价格备注');
+    const jiagequshi = checkRes(await get_jiagequshi(basic?.result?.url, basic?.result?.spbh), '获取价格趋势')
+    const trend = checkRes(await get_priceRemark(jiagequshi?.result?.trend), '价格备注')
     const ListPriceDetail = trend?.remark?.ListPriceDetail;
     const exclude = new Set(['当前到手价', '历史最低价', '618价格', '双11价格', '30天最低价', '60天最低价', '180天最低价']);
     const list = ListPriceDetail.filter(i => exclude.has(i.Name));
 
-    // ======== 本地无损计算单价（不发任何多余请求） ========
+    // 计算单价（安全包裹，不影响原表格）
     let unitPriceInfo = null;
     try {
         let curItem = list.find(i => i.Name === '当前到手价');
         let price = curItem ? parseFloat(curItem.Price.toString().replace(/[^0-9.]/g, '')) : 0;
-        
-        // 从慢慢买接口已有的所有字段与页面中搜寻标题文本
-        let possibleText = [
-            basic?.result?.title,
-            basic?.result?.mc,
-            trend?.remark?.title,
-            trend?.remark?.className,
-            responseBody
-        ].filter(Boolean).join(' ');
-
-        unitPriceInfo = calcUnitPrice(possibleText, price);
-    } catch (e) {
-        $.log('单价折算异常：' + e);
-    }
+        let scanText = `${basic?.result?.title || ''} ${basic?.result?.mc || ''} ${trend?.remark?.title || ''} ${responseBody || ''}`;
+        unitPriceInfo = calcUnitPrice(scanText, price);
+    } catch(e) {}
 
     const html = Price_HTML(list, unitPriceInfo);
     const body = responseBody.replace("<body>", `<body>${html}`);
     return {body};
 }
 
-// 核心换算逻辑（纯本地执行）
 function calcUnitPrice(rawText, price) {
     if (!rawText || !price || isNaN(price) || price <= 0) return null;
 
     let amount = 0;
     let unit = '';
 
-    // 匹配 330ml*24, 330ml*24罐, 330ml x 24 等
     let multiMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克|抽|包|卷|罐|瓶)\s*[*×xX]\s*(\d+)/i);
-    // 匹配 24罐*330ml 等
     let reverseMultiMatch = rawText.match(/(\d+)\s*(?:瓶|罐|包|袋|盒|支)?[*×xX]\s*(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克)/i);
-    // 单件匹配 500ml, 1.5L 等
     let singleMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(ml|毫升|l|升|g|克|kg|千克|抽|包|卷)/i);
 
     if (multiMatch) {
@@ -149,7 +134,6 @@ function calcUnitPrice(rawText, price) {
     };
 }
 
-// 返回结果检查函数
 function checkRes(res, desc = '') {
     if (res.ok !== 1) {
         $.log('慢慢买提示您：' + $.toStr(res));
@@ -158,7 +142,6 @@ function checkRes(res, desc = '') {
     return res;
 }
 
-// 比价html
 function Price_HTML(priceList, unitPriceInfo) {
     const rows = priceList.map(item => {
         let {Name: name, Date: date, Price: price = '', Difference: diff = ''} = item;
@@ -176,38 +159,20 @@ function Price_HTML(priceList, unitPriceInfo) {
 
     let unitPriceRow = '';
     if (unitPriceInfo) {
-        unitPriceRow = `<tr style="background:#FFF0F0;color:#e61a23;">
+        unitPriceRow = `<tr style="background:#FFF0F0;color:#E61A23;">
             <td><strong>折合单价</strong></td>
             <td>${unitPriceInfo.detailDesc}</td>
-            <td colspan="2" style="font-size:14px;color:#e61a23;"><strong>${unitPriceInfo.displayStr}</strong></td>
+            <td colspan="2" style="font-size:14px;color:#E61A23;"><strong>${unitPriceInfo.displayStr}</strong></td>
         </tr>`;
     }
 
-    return `<div class="price-container">
-        <table class="price-table">
-            <thead><tr><th>类型</th><th>日期</th><th>价格</th><th>差价</th></tr></thead>
-            <tbody>
-                ${unitPriceRow}
-                ${rows}
-            </tbody>
-        </table>
-    </div>
-    <style>
-        body,table{font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;}
-        .price-container{max-width:800px;margin:10px auto;padding:10px;font-size:13px;font-weight:bold;background:#FFF9F9;color:#333;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);}
-        .price-table{width:100%;border-collapse:separate;border-spacing:0;border-radius:8px;overflow:hidden;}
-        .price-table th{background:#e61a23;color:#fff;padding:12px;text-align:left;font-weight:bold;}
-        .price-table td{padding:12px;border-bottom:1px solid#EEE;font-weight:bold;}
-        .price-diff.up{color:#C91623;font-weight:bold;}
-        .price-diff.down{color:#00aa00;font-weight:bold;}
-    </style>`;
+    return `<div class="price-container"><table class="price-table"><thead><tr><th>类型</th><th>日期</th><th>价格</th><th>差价</th></tr></thead><tbody>${unitPriceRow}${rows}</tbody></table></div><style>body,table{font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;}.price-container{max-width:800px;margin:10px auto;padding:10px;font-size:13px;font-weight:bold;background:#FFF9F9;color:#333;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);}.price-table{width:100%;border-collapse:separate;border-spacing:0;border-radius:8px;overflow:hidden;}.price-table th{background:#e61a23;color:#fff;padding:12px;text-align:left;font-weight:bold;}.price-table td{padding:12px;border-bottom:1px solid#EEE;font-weight:bold;}.price-diff.up{color:#C91623;font-weight:bold;}.price-diff.down{color:#00aa00;font-weight:bold;}</style>`;
 }
 
-// 提交请求
 async function mmbRequest(Params, url) {
-    if (!$.manmanbuy) {
-        $.manmanbuy = getck();
-    }
+    // 强制每次重新调用 getck() 读取最新存储的持久化数据，避免内存缓存陈旧 token
+    $.manmanbuy = getck();
+
     let payloadStr;
     if (typeof Params === 'string') {
         payloadStr = Params;
