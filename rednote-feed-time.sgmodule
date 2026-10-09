@@ -1,0 +1,16 @@
+#!name=小红书 Feed 时间
+#!desc=在首页 feed 笔记标题前显示生成时间
+#!author=rednote-feed-time
+#!system=ios
+
+# 如本模块的 QUIC 阻断规则未生效，请在主配置中手动添加：
+# 配置 → 长按当前配置 → 编辑纯文本 → 找到 [Rule] 区域 → 顶部添加：
+# AND,((PROTOCOL,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,xiaohongshu.com)),REJECT
+[Rule]
+AND,((PROTOCOL,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,xiaohongshu.com)),REJECT
+
+[Script]
+rednote-feed-time = type=http-response, pattern=^https?:\/\/[a-z]+\.xiaohongshu\.com\/api\/sns\/v\d+\/homefeed\?, script-path=https://raw.githubusercontent.com/harry-sunhao/QuanX/refs/heads/main/rednote-feed-time.js, requires-body=true, timeout=60
+
+[MITM]
+hostname = %APPEND% *.xiaohongshu.com
